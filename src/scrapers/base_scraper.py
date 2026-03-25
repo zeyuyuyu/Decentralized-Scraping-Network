@@ -1,26 +1,27 @@
 import requests
-import random
-from abc import ABC, abstractmethod
+from bs4 import BeautifulSoup
+from typing import Dict, List, Any
 
-class BaseScraper(ABC):
-    def __init__(self, proxies=None):
-        self.proxies = proxies or []
-        self.current_proxy_index = 0
+class BaseScraper:
+    def __init__(self, url: str, headers: Dict[str, str] = None):
+        self.url = url
+        self.headers = headers or {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+        }
 
-    def get_with_proxy(self, url, **kwargs):
-        proxy = self.proxies[self.current_proxy_index]
-        response = requests.get(url, proxies=proxy, **kwargs)
-        self.current_proxy_index = (self.current_proxy_index + 1) % len(self.proxies)
-        return response
+    def get_html(self) -> str:
+        response = requests.get(self.url, headers=self.headers)
+        response.raise_for_status()
+        return response.text
 
-    @abstractmethod
-    def scrape(self, url):
-        pass
+    def parse_html(self, html: str) -> Any:
+        soup = BeautifulSoup(html, 'html.parser')
+        return soup
 
-    def handle_rate_limit(self, response):
-        if response.status_code == 429:
-            # Wait for the specified time before retrying
-            retry_after = int(response.headers.get('Retry-After', 60))
-            time.sleep(retry_after)
-            return True
-        return False
+    def extract_data(self, parsed_html: Any) -> List[Dict[str, Any]]:
+        raise NotImplementedError('Subclasses must implement the extract_data method')
+
+    def scrape(self) -> List[Dict[str, Any]]:
+        html = self.get_html()
+        parsed_html = self.parse_html(html)
+        return self.extract_data(parsed_html)
